@@ -1,7 +1,12 @@
 import app from "./app/app.js";
 import connectDB from "./config/db.js";
 
-await connectDB();
+try {
+  await connectDB();
+} catch (error) {
+  console.log("error in connecting db ", error);
+  process.exit(1);
+}
 
 app
   .listen(3000, "127.0.0.1", () => {
