@@ -1,13 +1,26 @@
 import mongoose from "mongoose";
 import { config } from "./env.config.js";
 
+let connectionPromise;
+
+mongoose.connection.on("disconnected", () => {
+  connectionPromise = undefined;
+});
+
 const connectDB = async () => {
-  try {
-    await mongoose.connect(config.MONGO_URI);
-    console.log("mongodb connected")
-  } catch (error) {
-    console.log("error in connecting to db: ", error);
+  if (mongoose.connection.readyState === 1) {
+    return mongoose;
   }
+
+  if (!connectionPromise) {
+    connectionPromise = mongoose.connect(config.MONGO_URI).catch((error) => {
+      connectionPromise = undefined;
+      throw error;
+    });
+  }
+
+  await connectionPromise;
+  return mongoose;
 };
 
 export default connectDB;

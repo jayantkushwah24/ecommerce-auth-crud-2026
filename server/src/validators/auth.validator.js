@@ -21,14 +21,12 @@ export const registerValidation = [
     .bail()
     .normalizeEmail(),
   body("password")
-    .trim()
     .notEmpty()
     .withMessage("password is required")
     .bail()
     .isStrongPassword()
     .withMessage("password must be strong"),
   body("confirmPassword")
-    .trim()
     .notEmpty()
     .withMessage("confirm password is required"),
 
@@ -38,6 +36,36 @@ export const registerValidation = [
     if (!errors.isEmpty()) {
       return res.status(400).json({
         message: "register user validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    next();
+  },
+];
+
+export const loginValidation = [
+  body("email")
+    .trim()
+    .notEmpty()
+    .withMessage("email is required")
+    .bail()
+    .isEmail()
+    .withMessage("email must be a valid email address")
+    .bail()
+    .normalizeEmail(),
+  body("password")
+    .isString()
+    .withMessage("password must be a string")
+    .bail()
+    .notEmpty()
+    .withMessage("password is required"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: "login validation failed",
         errors: errors.array(),
       });
     }

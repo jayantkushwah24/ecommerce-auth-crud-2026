@@ -1,4 +1,3 @@
-import React from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -22,7 +21,7 @@ const App = () => {
     {
       path: "/home",
       element: <Home />,
-    }
+    },
   ]);
   return <RouterProvider router={router} />;
 };

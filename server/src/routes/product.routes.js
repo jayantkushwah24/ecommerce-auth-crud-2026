@@ -12,8 +12,54 @@ import { createProductValidator } from "../validators/products.validator.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: {
+    fileSize: 4 * 1024 * 1024,
+    files: 5,
+    fieldSize: 64 * 1024,
+    fields: 10,
+  },
 });
+
+const uploadProductImages = (req, res, next) => {
+  upload.array("images", 5)(req, res, (error) => {
+    if (!error) {
+      const totalSize = (req.files || []).reduce(
+        (size, file) => size + file.size,
+        0,
+      );
+
+      if (totalSize > 4 * 1024 * 1024) {
+        return res.status(413).json({
+          message: "Combined image size cannot exceed 4 MB",
+        });
+      }
+
+      return next();
+    }
+
+    if (error instanceof multer.MulterError) {
+      const status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      return res.status(status).json({ message: error.message });
+    }
+
+    return next(error);
+  });
+};
+
+const parseProductFields = (req, res, next) => {
+  try {
+    for (const field of ["price", "sizes"]) {
+      if (typeof req.body[field] === "string") {
+        req.body[field] = JSON.parse(req.body[field]);
+      }
+    }
+    return next();
+  } catch {
+    return res.status(400).json({
+      message: "Price and sizes must contain valid JSON objects",
+    });
+  }
+};
 
 const router = express.Router();
 
@@ -26,7 +72,8 @@ const router = express.Router();
 router.post(
   "/",
   authenticate,
-  upload.array("images", 5),
+  uploadProductImages,
+  parseProductFields,
   createProductValidator,
   createProduct,
 );

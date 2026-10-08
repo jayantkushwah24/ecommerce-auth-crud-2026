@@ -3,6 +3,20 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { config } from "../config/env.config.js";
 
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+const clearRefreshCookie = (res) =>
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+
 export async function register(req, res) {
   try {
     const { name, email, password, confirmPassword } = req.body;
@@ -37,7 +51,14 @@ export async function register(req, res) {
       },
     });
   } catch (error) {
-    console.log("error in user registration", error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "user already exists",
+      });
+    }
+
+    console.error("Error registering user:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -47,31 +68,21 @@ export async function login(req, res) {
 
     const user = await UserModel.findOne({ email });
 
-    if (!user) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({
-        message: "user do not exists",
-      });
-    }
-
-    if (user.isLoggedIn === true) {
-      return res.status(400).json({
-        message: "user already loggin in",
-      });
-    }
-
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordCorrect) {
-      return res.status(401).json({
         message: "incorrect email or password",
       });
     }
 
-    let accessToken = jwt.sign({ userId: user._id }, config.JWT_ACCESS_SECRET, {
-      expiresIn: "15m",
-    });
+    const accessToken = jwt.sign(
+      { userId: user._id },
+      config.JWT_ACCESS_SECRET,
+      {
+        expiresIn: "15m",
+      },
+    );
 
-    let refreshToken = jwt.sign(
+    const refreshToken = jwt.sign(
       { userId: user._id },
       config.JWT_REFRESH_SECRET,
       {
@@ -79,20 +90,11 @@ export async function login(req, res) {
       },
     );
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      // secure: true,
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    user.refreshToken = await bcrypt.hash(refreshToken, 10);
+    user.isLoggedIn = true;
+    await user.save();
 
-    await UserModel.findOneAndUpdate(
-      { _id: user._id },
-      {
-        refreshToken: await bcrypt.hash(refreshToken, 10),
-        isLoggedIn: true,
-      },
-    );
+    res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
     return res.status(200).json({
       message: "user logged in successfully",
@@ -105,12 +107,13 @@ export async function login(req, res) {
       accessToken,
     });
   } catch (error) {
-    console.log("error in login user", error);
+    console.error("Error logging in user:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
 export async function refresh(req, res) {
-  const { refreshToken } = req.cookies;
+  const refreshToken = req.cookies?.refreshToken;
 
   if (!refreshToken) {
     return res.status(401).json({ message: "Refresh token missing" });
@@ -122,8 +125,16 @@ export async function refresh(req, res) {
     const user = await UserModel.findById(userId);
 
     if (!user) {
+      clearRefreshCookie(res);
       return res.status(401).json({
         message: "User does not exist",
+      });
+    }
+
+    if (!user.isLoggedIn || !user.refreshToken) {
+      clearRefreshCookie(res);
+      return res.status(401).json({
+        message: "Refresh token is no longer valid. Please login again.",
       });
     }
 
@@ -133,6 +144,7 @@ export async function refresh(req, res) {
     );
 
     if (!verifyRefreshToken) {
+      clearRefreshCookie(res);
       return res.status(401).json({
         message: "invalid refresh token",
       });
@@ -146,15 +158,10 @@ export async function refresh(req, res) {
       expiresIn: "7d",
     });
 
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      // secure: true,
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
     user.refreshToken = await bcrypt.hash(newRefreshToken, 10);
     await user.save();
+
+    res.cookie("refreshToken", newRefreshToken, refreshCookieOptions);
 
     return res.status(200).json({
       message: "token refresh successfully",
@@ -162,9 +169,37 @@ export async function refresh(req, res) {
     });
   } catch (error) {
     if (error.name === "TokenExpiredError") {
+      try {
+        const decodedToken = jwt.decode(refreshToken);
+        if (
+          decodedToken &&
+          typeof decodedToken === "object" &&
+          decodedToken.userId
+        ) {
+          const user = await UserModel.findById(decodedToken.userId);
+          if (
+            user?.refreshToken &&
+            (await bcrypt.compare(refreshToken, user.refreshToken))
+          ) {
+            user.refreshToken = null;
+            user.isLoggedIn = false;
+            await user.save();
+          }
+        }
+      } catch (cleanupError) {
+        console.error("Error cleaning up expired refresh token:", cleanupError);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+
+      clearRefreshCookie(res);
       return res
         .status(401)
         .json({ message: "Refresh token expired. Please login again." });
+    }
+
+    if (error.name === "JsonWebTokenError" || error.name === "NotBeforeError") {
+      clearRefreshCookie(res);
+      return res.status(401).json({ message: "Invalid refresh token" });
     }
 
     console.error("Refresh token error:", error);
@@ -194,11 +229,7 @@ export async function logout(req, res) {
     user.isLoggedIn = false;
     await user.save();
 
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      // secure: true,
-      sameSite: "strict",
-    });
+    clearRefreshCookie(res);
 
     return res.status(200).json({
       message: "user logged out successfully",
@@ -236,5 +267,8 @@ export async function me(req, res) {
         },
       },
     });
-  } catch (error) {}
+  } catch (error) {
+    console.error("Error fetching current user:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 }

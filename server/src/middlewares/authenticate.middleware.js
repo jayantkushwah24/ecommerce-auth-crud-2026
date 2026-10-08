@@ -15,6 +15,11 @@ export async function authenticate(req, res, next) {
     }
 
     const decoded = jwt.verify(accessToken, config.JWT_ACCESS_SECRET);
+    if (!decoded || typeof decoded !== "object" || !decoded.userId) {
+      return res.status(401).json({
+        message: "Invalid access token",
+      });
+    }
 
     req.userId = decoded.userId;
 

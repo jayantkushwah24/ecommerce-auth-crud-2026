@@ -53,19 +53,28 @@ export const createProductValidator = [
     .bail()
     .isInt({ min: 0 })
     .withMessage("stock must be greater than or equal to 0"),
-  body("images")
-    .isArray({ min: 1 })
-    .withMessage("images are required")
-    .custom((value) => {
-      if (value.length > 5) {
-        throw new Error("A product cannot have more than five images.");
-      }
-      return true;
-    }),
-  body("published").isBoolean().withMessage("published must be a boolean"),
+  body("published")
+    .optional()
+    .isBoolean()
+    .withMessage("published must be a boolean"),
 
   (req, res, next) => {
     const errors = validationResult(req);
+
+    if (
+      errors.isEmpty() &&
+      req.files?.some((file) => !file.mimetype.startsWith("image/"))
+    ) {
+      return res.status(400).json({
+        message: "All uploaded files must be images",
+      });
+    }
+
+    if (errors.isEmpty() && (!req.files || req.files.length === 0)) {
+      return res.status(400).json({
+        message: "At least one product image is required",
+      });
+    }
 
     if (!errors.isEmpty()) {
       return res

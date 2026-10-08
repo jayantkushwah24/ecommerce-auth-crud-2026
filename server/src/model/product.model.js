@@ -43,9 +43,9 @@ const productSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (v) {
-          return v.length <= 5;
+          return v.length >= 1 && v.length <= 5;
         },
-        message: "A product can not have more than five image.",
+        message: "A product must have between one and five images.",
       },
     },
     published: {

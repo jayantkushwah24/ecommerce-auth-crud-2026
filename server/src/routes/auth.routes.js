@@ -1,5 +1,8 @@
 import express from "express";
-import { registerValidation } from "../validators/auth.validator.js";
+import {
+  loginValidation,
+  registerValidation,
+} from "../validators/auth.validator.js";
 import {
   login,
   logout,
@@ -25,7 +28,7 @@ router.post("/register", registerValidation, register);
  * @access Public
  * @description Authenticate user, issue access + refresh tokens
  */
-router.post("/login", login);
+router.post("/login", loginValidation, login);
 
 /**
  * @method POST

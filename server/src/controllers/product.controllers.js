@@ -1,12 +1,13 @@
 import { ImageKit, toFile } from "@imagekit/nodejs";
+import { randomUUID } from "node:crypto";
 import { config } from "../config/env.config.js";
 import mongoose from "mongoose";
 import ProductModel from "../model/product.model.js";
 
 const imagekit = new ImageKit({
   privateKey: config.IMAGEKIT_PRIVATE_KEY,
-  publicKey: "public_QFcLGSwCK+gHKruu83uTLeIg6ek=",
-  urlEndpoint: "https://snitch.io",
+  publicKey: config.IMAGEKIT_PUBLIC_KEY,
+  urlEndpoint: config.IMAGEKIT_URL_ENDPOINT,
 });
 
 export async function createProduct(req, res) {
@@ -26,7 +27,7 @@ export async function createProduct(req, res) {
 
       return imagekit.files.upload({
         file: uploadFile,
-        fileName: `${Date.now()}-${file.originalname}`,
+        fileName: `${randomUUID()}-${file.originalname.replace(/[\\/]/g, "_")}`,
         folder: "/products",
       });
     });
@@ -34,7 +35,6 @@ export async function createProduct(req, res) {
     const uploadResults = await Promise.all(uploadPromises);
 
     uploadResults.forEach((result) => imageUrls.push(result.url));
-    console.log(req.body);
     const newProduct = await ProductModel.create({
       title: req.body.title,
       description: req.body.description,
@@ -55,7 +55,7 @@ export async function createProduct(req, res) {
     });
   } catch (error) {
     console.error("Error creating product:", error);
-    res.status(500).json({ error: error.message || "Something went wrong." });
+    return res.status(500).json({ message: "Unable to create product" });
   }
 }
 
@@ -63,20 +63,15 @@ export async function getAllProducts(req, res) {
   try {
     const allProducts = await ProductModel.find();
 
-    if (!allProducts) {
-      return res.status(404).json({
-        message: "Products not found",
-      });
-    }
-
-    return res.status(201).json({
+    return res.status(200).json({
       message: "All products fetched successfully",
       data: {
         allProducts,
       },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching products:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -84,9 +79,9 @@ export async function getProductById(req, res) {
   try {
     const id = req.params.id;
 
-    if (!id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
-        message: "product id is required",
+        message: "Invalid product id",
       });
     }
 
@@ -98,14 +93,15 @@ export async function getProductById(req, res) {
       });
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
       message: "product with given id fetched successfully",
       data: {
         product,
       },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching product:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -113,19 +109,25 @@ export async function deleteProductById(req, res) {
   try {
     const id = req.params.id;
 
-    if (!id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
-        message: "product id is required",
+        message: "Invalid product id",
       });
     }
 
-    await ProductModel.findByIdAndDelete(id);
+    const product = await ProductModel.findByIdAndDelete(id);
+    if (!product) {
+      return res.status(404).json({
+        message: "Product not found",
+      });
+    }
 
     return res.status(200).json({
       message: "product deleted successfully",
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error deleting product:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -148,6 +150,18 @@ export async function updateProductById(req, res) {
     }
 
     const { title, description, price, sizes, published } = req.body || {};
+
+    if (
+      title === undefined &&
+      description === undefined &&
+      price === undefined &&
+      sizes === undefined &&
+      published === undefined
+    ) {
+      return res.status(400).json({
+        message: "At least one product field must be provided",
+      });
+    }
 
     if (title !== undefined) {
       if (typeof title !== "string" || title.trim() === "") {

@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/register", "destination": "/index.html" },
+    { "source": "/home", "destination": "/index.html" },
+    { "source": "/create-product", "destination": "/index.html" }
+  ]
+}
