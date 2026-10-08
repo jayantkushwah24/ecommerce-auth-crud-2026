@@ -18,12 +18,8 @@ const forwardedRequestHeaders = new Set([
 ]);
 
 export default async function handler(req, res) {
-  const backendApiUrl = process.env.BACKEND_API_URL;
-  if (!backendApiUrl) {
-    return res.status(500).json({
-      message: "The BACKEND_API_URL environment variable is not configured",
-    });
-  }
+  const backendApiUrl =
+    process.env.BACKEND_API_URL || "https://prodhub-be.vercel.app";
 
   let backendOrigin;
   try {
