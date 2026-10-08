@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://prodhub-be.vercel.app/api/:path*"
+    },
     { "source": "/register", "destination": "/index.html" },
     { "source": "/home", "destination": "/index.html" },
     { "source": "/create-product", "destination": "/index.html" }

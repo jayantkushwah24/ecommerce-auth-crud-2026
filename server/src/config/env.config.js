@@ -28,8 +28,11 @@ export const config = {
   IMAGEKIT_PRIVATE_KEY: process.env.IMAGEKIT_PRIVATE_KEY,
   IMAGEKIT_PUBLIC_KEY: process.env.IMAGEKIT_PUBLIC_KEY,
   IMAGEKIT_URL_ENDPOINT: process.env.IMAGEKIT_URL_ENDPOINT,
-  CLIENT_ORIGINS: (process.env.CLIENT_ORIGINS || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  CLIENT_ORIGINS: [
+    "https://ecommerce-auth-crud-2026.vercel.app",
+    ...(process.env.CLIENT_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  ],
 };

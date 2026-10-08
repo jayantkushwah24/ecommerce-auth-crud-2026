@@ -18,7 +18,7 @@ uploaded to ImageKit.
 - Multiple product image uploads through ImageKit
 - Responsive interface with inline product editing
 - Toast notifications for success, validation, and API errors
-- Vercel serverless deployment for the API and a same-origin frontend API proxy
+- Vercel serverless deployment for the API with same-origin frontend API rewrites
 
 ## Technology
 
@@ -37,7 +37,6 @@ uploaded to ImageKit.
 ```text
 .
 ├── client/
-│   ├── api/                 # Vercel same-origin API proxy
 │   ├── src/
 │   │   ├── components/      # Auth, navigation, and product UI
 │   │   ├── config/          # Axios client and token refresh
@@ -188,8 +187,8 @@ and `XXL`.
 ## Deploy to Vercel
 
 The frontend and API are separate Vercel projects from this repository. The
-frontend's `/api/*` function forwards API requests to the API project so the
-browser uses a same-origin path and refresh cookies remain first-party.
+frontend's `/api/*` Vercel rewrite forwards API requests to the API project so
+the browser uses a same-origin path and refresh cookies remain first-party.
 
 ### API project
 
@@ -200,7 +199,7 @@ browser uses a same-origin path and refresh cookies remain first-party.
    `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_PUBLIC_KEY`, and
    `IMAGEKIT_URL_ENDPOINT`.
 3. Set `CLIENT_ORIGINS` only if browsers will call the API domain directly.
-   Normal frontend traffic goes through the same-origin proxy.
+   Normal frontend traffic goes through the same-origin rewrite.
 4. Ensure your MongoDB provider permits connections from your Vercel
    deployment, using an appropriate network access configuration for your
    provider and plan.
